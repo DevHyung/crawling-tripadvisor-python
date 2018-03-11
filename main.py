@@ -7,36 +7,49 @@ from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 
 if __name__ == "__main__":
-    url = 'https://www.tripadvisor.co.uk/Airline_Review-d8729020-Reviews-Cheap-Flights-American-Airlines#REVIEWS'
+    url = 'https://www.tripadvisor.co.uk/Airline_Review-d8729060-Reviews-Cheap-Flights-Delta-Air-Lines'
     driver = webdriver.Chrome("./chromedriver")
     driver.get(url)
     driver.find_element_by_class_name('ulBlueLinks').click()
     time.sleep(1)
-    bs4 = BeautifulSoup(driver.page_source, 'lxml')
-    all_div = bs4.find_all('div', class_='innerBubble')
-
-
+    # 엑셀 포맷 제작
     wb = xlsxwriter.Workbook('./test.xlsx')
     ws = wb.add_worksheet('sheet1')
-
-    ws.write(0, 0, "Title")
-    ws.write(0, 1, "Reviews")
-    ws.write(0, 2, "Name")
-    ws.write(0, 3, "Location")
-    ws.write(0, 6, "Date")
-    ws.write(0, 9, "Rate")
-    # ws.write(0,10,"Tag")
-    ws.write(0, 13, "NofHelp")
-    wb.close()
-
-
-    url1 = 'https://www.tripadvisor.co.uk/Airline_Review-d8729020-Reviews-Cheap-Flights'
-    url2 = '-American-Airlines#REVIEWS'
+    ws.write(0, 1, "제목")
+    ws.write(0, 2, "전체별점")
+    ws.write(0, 3, "게시날짜")
+    ws.write(0, 4, "리뷰내용")
+    ws.write(0, 5, "여행팁")
+    ws.write(0, 6, "여행날짜")
+    ws.write(0,7,'세부별점1(Legroom), (1~5)')
+    ws.write(0,8,'세부별점2(Seat Comfort), (1~5)')
+    ws.write(0,9,'세부별점3(Customer Service), (1~5)')
+    ws.write(0,10,'세부별점4(Value for Money), (1~5)')
+    ws.write(0,11,'세부별점5(Cleanliness), (1~5)')
+    ws.write(0,12,'세부별점6(Check-in and Boarding), (1~5)')
+    ws.write(0,13,'세부별점7(Food and Beverage), (1~5)')
+    ws.write(0,14,'세부별점8(In-flight entertainment (WiFi, TV, films)), (1~5)')
+    ws.write(0,15,'태그1(여행유형)')
+    ws.write(0,16,'태그2(서비스유형)')
+    ws.write(0,17,'태그3(출발지)')
+    ws.write(0,18,'태그(도착지)')
+    ws.write(0,19,'리뷰투표수')
+    ws.write(0,20,'유저아이디')
+    ws.write(0,21,'유저출신(나라)')
+    ws.write(0,22,'유저출신(지역)')
+    ws.write(0,23,'유저레벨')
+    ws.write(0,24,'유저총리뷰수')
+    ws.write(0,25,'유저총투표수')
+    ws.write(0,26,'도시방문수')
+    ws.write(0,27,'사진업로드수')
+    ws.write(0,28,'유저리뷰분포(Excellent)')
+    ws.write(0,29,'유저리뷰분포(Very good)	')
+    ws.write(0,30,'유저리뷰분포(Average)')
+    ws.write(0,31,'유저리뷰분포(Poor)')
+    ws.write(0,32,'유저리뷰분포(Terrible)')
 
     j = 1
-
     for num in range(10):  ### num 이라는 ??변수를 0부터 99 까지 돌리는 것?
-
         if num == 0:  ###
             page = ''
         else:
