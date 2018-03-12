@@ -1,19 +1,31 @@
 import requests
 import time
 import xlsxwriter
-
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
+"""
+wb = xlsxwriter.Workbook('./test.xlsx')
 
+ws = wb.add_worksheet('sheet1')
+ws.write(0, 1, ''.join(['t','e','s','t']))
+wb.close()
+exit(-1)
+"""
 if __name__ == "__main__":
     url = 'https://www.tripadvisor.co.uk/Airline_Review-d8729060-Reviews-Cheap-Flights-Delta-Air-Lines'
     driver = webdriver.Chrome("./chromedriver")
+    driver.maximize_window()
     driver.get(url)
+    driver.execute_script('window.scrollTo(0, document.body.scrollHeight);')
+    time.sleep(1)
+    driver.execute_script('window.scrollTo(0, 0);')
+    time.sleep(1)
     driver.find_element_by_class_name('ulBlueLinks').click()
     time.sleep(1)
     # 엑셀 포맷 제작
     wb = xlsxwriter.Workbook('./test.xlsx')
+
     ws = wb.add_worksheet('sheet1')
     ws.write(0, 1, "제목")
     ws.write(0, 2, "전체별점")
@@ -49,46 +61,97 @@ if __name__ == "__main__":
     ws.write(0,32,'유저리뷰분포(Terrible)')
 
     j = 1
-    for num in range(10):  ### num 이라는 ??변수를 0부터 99 까지 돌리는 것?
-        if num == 0:  ###
+    for num in range(1):
+        if num == 0:
             page = ''
+            real_url = url
         else:
-            page = '-or' + str(num * 10)  ### 그냥 + 로 텍스트를 합칠 수 있는 것?
-        real_url = url1 + page + url2
+            page = '-or' + str(num * 10)
+            real_url = url + page
+            driver.get(real_url)
+            driver.find_element_by_class_name('ulBlueLinks').click()
+            time.sleep(1)
 
-        site = requests.get(real_url)
-        site_bs = BeautifulSoup(site.text, 'lxml')
-
+        site_bs = BeautifulSoup(driver.page_source, 'lxml')
         reviewSelector = site_bs.find_all('div', class_='reviewSelector')
-        reviewSelector
-
-        for c in reviewSelector:  ### for문 이해,, reviewSelector를 반복하는데 어떤 값을?
-
+        for c in reviewSelector:
+            #1 2 3 4      8  10  11
             ############  Title, Reviews, Name, Location###########################################
-            Title = c.find("span", class_='noQuotes').text
-            Reviews = c.find("p", class_='partial_entry').text
-            if c.find("span", dir='auto'):
-                Name = c.find("span", dir='auto').text
-                # NName=c.find("span",class_=expand inline scrname mbrName BD0C46BB8FD550F5EC7EE84EEE3F1563)
-                Location = c.find("div", class_='location').text
-            else:
-                Name = ''
-                Location = ''
-
-            ############  Date, Rate, Tag, ########################################################
-            Date = c.find("span", class_='ratingDate').text
-            Ratetag = c.find("div", class_='rating reviewItemInline')
+            imglink = c.find('a').find('img',class_='avatar')['src']
+            uid = c.find('div',class_='memberOverlayLink')['id'].split('-')[0].split('_')[1].strip()
+            src = c.find('div', class_='memberOverlayLink')['id'].split('-')[1].split('_')[1].strip()
+            Title = c.find("span", class_='noQuotes').text #1
+            Ratetag = c.find("div", class_='rating reviewItemInline')#2
             Rate = Ratetag.find('span')['class'][1].split("_")[1]
-            Tag_all = c.find_all("span", class_='categoryLabel')
+            Date = c.find("span", class_='ratingDate').text  # 3
+            Reviews = c.find("p", class_='partial_entry').text #4
+            if c.find('div', class_='reviewItem inlineRoomTip'): #5
+                Tip = c.find('div', class_='reviewItem inlineRoomTip').text.split('Travel Tip:')[-1].split('See more travel tips')[0].strip()
+            else:
+                Tip = ''
+            if c.find('span',class_='recommend-titleInline'):  # 6
+                TravelDate = c.find('span',class_='recommend-titleInline').text
+            else:
+                TravelDate = ''
+            DeatailRating = [] #7
+            DeatailRating.clear()
+            try:
+                uls = c.find('ul', class_='recommend').find('li').find_all('ul')
+                for ul in uls:
+                    lis = ul.find_all('li')
+                    for li in lis:
+                        DeatailRating.append(li.text.strip()+":"+li.find('span')['class'][1].split("_")[-1])
+            except:
+                pass
+
+            Tag_all = c.find_all("span", class_='categoryLabel')  # 8
             Tag = []
             for t in Tag_all:
                 Tag.append(t.text)
 
-            if c.find('span', class_='numHlp'):
-                NofHelp = c.find('span', class_='numHlp').find('span').text
-            else:
-                NofHelp = '0'
+            try: # 9
+                numhlp = c.find('span',class_='numHlpIn').text
+            except:
+                numhlp = 0
 
+            if c.find("span", dir='auto'):
+                Name = c.find("span", dir='auto').text #10
+                Location = c.find("div", class_='location').text#11
+            else:
+                Name = ''
+                Location = ''
+
+            level = c.find('span',class_='contribution-count').text # 12
+            reviewcnt = c.find('span',class_='badgeText').text.split('reviews')[0].strip()#13
+            votecnt = c.find_all('span',class_='badgeText')[-1].text.split('helpful')[0].strip()#14
+
+            #15.16
+            code = requests.get(
+                'https://www.tripadvisor.co.uk/MemberOverlay?Mode=owa&uid={}&c=&src={}&fus=false&partner=false&LsoId='.format(uid,src))
+            # code = open('test.txt',encoding='utf8').read()
+            bs4 = BeautifulSoup(code.text, 'lxml')
+            lis = bs4.find_all('li', class_='countsReviewEnhancementsItem')
+            citicnt = 0
+            photocnt =0
+            for li in lis:
+                if 'Cities' in li.get_text().strip():
+                    citicnt =li.find('span', class_='badgeTextReviewEnhancements').text.split(' ')[0].strip()
+                if 'Photos' in li.get_text().strip():
+                    photocnt = li.find('span', class_='badgeTextReviewEnhancements').text.split(' ')[0].strip()
+            #17
+            divs = bs4.find_all('span', class_='rowCountReviewEnhancements rowCellReviewEnhancements')
+            try:
+                review_excellent_cnt = divs[0].get_text().strip()
+                review_verygood_cnt = divs[1].get_text().strip()
+                review_average_cnt = divs[2].get_text().strip()
+                review_poor_cnt = divs[3].get_text().strip()
+                review_terrible_cnt = divs[4].get_text().strip()
+            except:
+                review_excellent_cnt = 0
+                review_verygood_cnt= 0
+                review_average_cnt= 0
+                review_poor_cnt = 0
+                review_terrible_cnt = 0
             print("[Title]", Title)
             print("[Reviews]", Reviews)
             print("[Name]", Name)  ### 띄아쓰기 없애기
@@ -96,21 +159,67 @@ if __name__ == "__main__":
             print("[Date]", Date)  ### 날짜 형식만 남기기,,
             print("[Rate]", Rate)  ### 10의자리를 1의자리로 바꾸기
             print("[Tag]", Tag)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[Tip]", Tip)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[TravelDate]", TravelDate)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[DeatailRating]", DeatailRating)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[numhlp]", numhlp)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[level]", level)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[reviewcnt]", reviewcnt)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[votecnt]", votecnt)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[citicnt]", citicnt)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[photocnt]", photocnt)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[imglink]", imglink)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[review_excellent_cnt]", review_excellent_cnt)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[review_verygood_cnt]", review_verygood_cnt)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[review_average_cnt]", review_average_cnt)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[review_poor_cnt]", review_poor_cnt)  ### 세번째 태그 경로 " - " 이것도 나누기,
+            print("[review_terrible_cnt]", review_terrible_cnt)  ### 세번째 태그 경로 " - " 이것도 나누기,
+
             # print("[# of Help]",NofHelp)
             # print("[# of Reviews]",NofR)
             # print("[# of Total Help]",NofTH)
-
-            ws.write(j, 0, Title)
-            ws.write(j, 1, Reviews)
-            ws.write(j, 2, Name)
-            ws.write(j, 3, Location)
-            date2 = Date.split(' ')
-            ws.write(j, 6, date2[1] + date2[2])  ### 이걸 숫자만 남기는 방법
-            ws.write(j, 9, Rate)
-            ws.write_row(j, 10, Tag)  ### Tag 오류
-            ws.write(j, 13, NofHelp)
-            ws.write(j, 15, NofHelp)
-            ws.write(j, 16, NofHelp)
+            ws.write(j, 1, Title)
+            ws.write(j, 2, int(Rate)/10)
+            ws.write(j, 3, Date)
+            ws.write(j, 4, Reviews)
+            ws.write(j, 5, Tip)
+            ws.write(j, 6, TravelDate)
+            try:
+                ws.write(j, 7, DeatailRating[4]) # legroom
+                ws.write(j, 8, DeatailRating[0]) #seatcompfort
+                ws.write(j, 9, DeatailRating[1]) #customer service
+                ws.write(j, 10, DeatailRating[6]) # value for moeny
+                ws.write(j, 11, DeatailRating[2]) #clean
+                ws.write(j, 12, DeatailRating[-1])#check in and boarding
+                ws.write(j, 13, DeatailRating[3]) # food
+                ws.write(j, 14, DeatailRating[5])# in -flight
+            except: # 리뷰가없
+                ws.write(j, 7, 0)  # legroom
+                ws.write(j, 8, 0)  # seatcompfort
+                ws.write(j, 9, 0)  # customer service
+                ws.write(j, 10, 0)  # value for moeny
+                ws.write(j, 11, 0)  # clean
+                ws.write(j, 12, 0)  # check in and boarding
+                ws.write(j, 13, 0)  # food
+                ws.write(j, 14, 0)  # in -flight
+            ws.write(j, 15, Tag[0])
+            ws.write(j, 16, Tag[1])
+            ws.write(j, 17, Tag[2])
+            ws.write(j, 18, Tag[3])
+            ws.write(j, 19, numhlp)
+            ws.write(j, 20, Name)
+            ws.write(j, 21, Location)
+            ws.write(j, 22, Location)
+            ws.write(j, 23, level)
+            ws.write(j, 24, reviewcnt)
+            ws.write(j, 25, votecnt)
+            ws.write(j, 26, citicnt)
+            ws.write(j, 27, photocnt)
+            ws.write(j, 28, review_excellent_cnt)
+            ws.write(j, 29, review_verygood_cnt)
+            ws.write(j, 30, review_average_cnt)
+            ws.write(j, 31, review_poor_cnt)
+            ws.write(j, 32, review_terrible_cnt)
             print("_________________________________")
 
             j = j + 1
