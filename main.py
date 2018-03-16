@@ -3,24 +3,13 @@ import time
 import xlsxwriter
 from bs4 import BeautifulSoup
 from selenium import webdriver
-from selenium.webdriver.common.action_chains import ActionChains
-"""
-wb = xlsxwriter.Workbook('./test.xlsx')
+from selenium.webdriver.common.keys import Keys
 
-ws = wb.add_worksheet('sheet1')
-ws.write(0, 1, ''.join(['t','e','s','t']))
-wb.close()
-exit(-1)
-"""
 if __name__ == "__main__":
     url = 'https://www.tripadvisor.co.uk/Airline_Review-d8729060-Reviews-Cheap-Flights-Delta-Air-Lines'
     driver = webdriver.Chrome("./chromedriver")
     driver.maximize_window()
     driver.get(url)
-    driver.execute_script('window.scrollTo(0, document.body.scrollHeight);')
-    time.sleep(1)
-    driver.execute_script('window.scrollTo(0, 0);')
-    time.sleep(1)
     driver.find_element_by_class_name('ulBlueLinks').click()
     time.sleep(1)
     # 엑셀 포맷 제작
@@ -59,9 +48,10 @@ if __name__ == "__main__":
     ws.write(0,30,'유저리뷰분포(Average)')
     ws.write(0,31,'유저리뷰분포(Poor)')
     ws.write(0,32,'유저리뷰분포(Terrible)')
+    ws.write(0, 33, '이미지링크')
 
     j = 1
-    for num in range(1):
+    for num in range(5):
         if num == 0:
             page = ''
             real_url = url
@@ -72,19 +62,34 @@ if __name__ == "__main__":
             driver.find_element_by_class_name('ulBlueLinks').click()
             time.sleep(1)
 
+        elem = driver.find_element_by_tag_name("body")
+        for _ in range(5):
+            elem.send_keys(Keys.PAGE_DOWN)
+            time.sleep(0.2)
+        driver.execute_script('window.scrollTo(0, 0);')
         site_bs = BeautifulSoup(driver.page_source, 'lxml')
         reviewSelector = site_bs.find_all('div', class_='reviewSelector')
         for c in reviewSelector:
-            #1 2 3 4      8  10  11
             ############  Title, Reviews, Name, Location###########################################
-            imglink = c.find('a').find('img',class_='avatar')['src']
+            imglink = c.find('div',class_='avatar').find('a').find('img',class_='avatar')['src']
+            if imglink == 'https://static.tacdn.com/img2/x.gif':
+                imglink =  c.find_all('div', class_='avatar')[-1].find('a').find('img', class_='avatar')['src']
             uid = c.find('div',class_='memberOverlayLink')['id'].split('-')[0].split('_')[1].strip()
             src = c.find('div', class_='memberOverlayLink')['id'].split('-')[1].split('_')[1].strip()
             Title = c.find("span", class_='noQuotes').text #1
             Ratetag = c.find("div", class_='rating reviewItemInline')#2
             Rate = Ratetag.find('span')['class'][1].split("_")[1]
-            Date = c.find("span", class_='ratingDate').text  # 3
-            Reviews = c.find("p", class_='partial_entry').text #4
+            try: # title이없이 바로써져있을떄
+                Date = c.find("span", class_='ratingDate')['title']  # 3
+            except:
+                Date = c.find("span", class_='ratingDate').text.replace('Reviewed','').strip()
+            try:
+                Date = str(time.strptime(Date, '%d %B %Y').tm_year) + '/' + str(
+                    time.strptime(Date, '%d %B %Y').tm_mon) + '/' + str(
+                    time.strptime(Date, '%d %B %Y').tm_mday)
+                Reviews = c.find_all("div", class_='entry')[-1].text.strip().replace('\n','') #4
+            except:
+                print("String to Date 오류 ",Date)
             if c.find('div', class_='reviewItem inlineRoomTip'): #5
                 Tip = c.find('div', class_='reviewItem inlineRoomTip').text.split('Travel Tip:')[-1].split('See more travel tips')[0].strip()
             else:
@@ -100,15 +105,18 @@ if __name__ == "__main__":
                 for ul in uls:
                     lis = ul.find_all('li')
                     for li in lis:
-                        DeatailRating.append(li.text.strip()+":"+li.find('span')['class'][1].split("_")[-1])
+                        DeatailRating.append(int(li.find('span')['class'][1].split("_")[-1]))
+                        #DeatailRating.append(li.text.strip()+":"+li.find('span')['class'][1].split("_")[-1])
             except:
                 pass
 
             Tag_all = c.find_all("span", class_='categoryLabel')  # 8
             Tag = []
-            for t in Tag_all:
+            for t in Tag_all[:3]:
                 Tag.append(t.text)
-
+            depart, end = Tag[2].split('-')
+            Tag[2] = depart.strip()
+            Tag.append(end.strip())
             try: # 9
                 numhlp = c.find('span',class_='numHlpIn').text
             except:
@@ -120,8 +128,10 @@ if __name__ == "__main__":
             else:
                 Name = ''
                 Location = ''
-
-            level = c.find('span',class_='contribution-count').text # 12
+            try:
+                level = c.find('span',class_='contribution-count').text # 12
+            except:#레벨없는경우
+                level = 0
             reviewcnt = c.find('span',class_='badgeText').text.split('reviews')[0].strip()#13
             votecnt = c.find_all('span',class_='badgeText')[-1].text.split('helpful')[0].strip()#14
 
@@ -220,6 +230,7 @@ if __name__ == "__main__":
             ws.write(j, 30, review_average_cnt)
             ws.write(j, 31, review_poor_cnt)
             ws.write(j, 32, review_terrible_cnt)
+            ws.write(j, 33, imglink)
             print("_________________________________")
 
             j = j + 1
