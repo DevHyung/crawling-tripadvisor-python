@@ -7,14 +7,16 @@ from selenium.webdriver.common.keys import Keys
 
 if __name__ == "__main__":
     url = 'https://www.tripadvisor.co.uk/Airline_Review-d8729060-Reviews-Cheap-Flights-Delta-Air-Lines'
+    ### 드라이버 셋팅
     driver = webdriver.Chrome("./chromedriver")
     driver.maximize_window()
     driver.get(url)
-    driver.find_element_by_class_name('ulBlueLinks').click()
+    driver.find_element_by_class_name('ulBlueLinks').click() #more 클릭
     time.sleep(1)
-    # 엑셀 포맷 제작
-    wb = xlsxwriter.Workbook('./test.xlsx')
-
+    #### 엑셀 포맷 제작
+    now = time.localtime()
+    filename = "%04d%02d%02d_%02d%02d%02d추출" % (now.tm_year, now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec)
+    wb = xlsxwriter.Workbook('./'+filename+'.xlsx')
     ws = wb.add_worksheet('sheet1')
     ws.write(0, 1, "제목")
     ws.write(0, 2, "전체별점")
@@ -49,10 +51,10 @@ if __name__ == "__main__":
     ws.write(0,31,'유저리뷰분포(Poor)')
     ws.write(0,32,'유저리뷰분포(Terrible)')
     ws.write(0, 33, '이미지링크')
-
+    ### 파싱시작
     j = 1
-    for num in range(5):
-        if num == 0:
+    for num in range(100): # 100페이지까지 이부분을 수정하면 원하는페이지 파싱가능
+        if num == 0: #원래코드유지
             page = ''
             real_url = url
         else:
@@ -61,19 +63,22 @@ if __name__ == "__main__":
             driver.get(real_url)
             driver.find_element_by_class_name('ulBlueLinks').click()
             time.sleep(1)
-
+        # 페이지를 아래로 한번내려야 모든이미지리소스들이 DOM에 적용이되어서
+        # 한번페이지를 다 내린후
         elem = driver.find_element_by_tag_name("body")
         for _ in range(5):
             elem.send_keys(Keys.PAGE_DOWN)
             time.sleep(0.2)
         driver.execute_script('window.scrollTo(0, 0);')
+        # driver -> pagesource 받기
         site_bs = BeautifulSoup(driver.page_source, 'lxml')
         reviewSelector = site_bs.find_all('div', class_='reviewSelector')
         for c in reviewSelector:
-            ############  Title, Reviews, Name, Location###########################################
+
             imglink = c.find('div',class_='avatar').find('a').find('img',class_='avatar')['src']
-            if imglink == 'https://static.tacdn.com/img2/x.gif':
+            if imglink == 'https://static.tacdn.com/img2/x.gif': # 엑박 이미지 리소스있으면
                 imglink =  c.find_all('div', class_='avatar')[-1].find('a').find('img', class_='avatar')['src']
+            # uid, src 조합으로 사람 상세페이지 url 생성가능
             uid = c.find('div',class_='memberOverlayLink')['id'].split('-')[0].split('_')[1].strip()
             src = c.find('div', class_='memberOverlayLink')['id'].split('-')[1].split('_')[1].strip()
             Title = c.find("span", class_='noQuotes').text #1
@@ -83,10 +88,11 @@ if __name__ == "__main__":
                 Date = c.find("span", class_='ratingDate')['title']  # 3
             except:
                 Date = c.find("span", class_='ratingDate').text.replace('Reviewed','').strip()
-            try:
+            try:# date string convert to date
                 Date = str(time.strptime(Date, '%d %B %Y').tm_year) + '/' + str(
                     time.strptime(Date, '%d %B %Y').tm_mon) + '/' + str(
                     time.strptime(Date, '%d %B %Y').tm_mday)
+                # 리뷰의 엔터 제거
                 Reviews = c.find_all("div", class_='entry')[-1].text.strip().replace('\n','') #4
             except:
                 print("String to Date 오류 ",Date)
@@ -114,7 +120,8 @@ if __name__ == "__main__":
             Tag = []
             for t in Tag_all[:3]:
                 Tag.append(t.text)
-            depart, end = Tag[2].split('-')
+            #출발- 도착 나누기
+            depart, end = Tag[2].split('-',maxsplit=1)
             Tag[2] = depart.strip()
             Tag.append(end.strip())
             try: # 9
@@ -123,27 +130,31 @@ if __name__ == "__main__":
                 numhlp = 0
 
             if c.find("span", dir='auto'):
-                Name = c.find("span", dir='auto').text #10
-                Location = c.find("div", class_='location').text#11
+                try:
+                    Location,nation = c.find("div", class_='location').text.split(',')#11
+                except: # 나라,지역 이아니라 둘장 하나있을경우는 두개 동일시
+                    Location = c.find("div", class_='location').text
+                    nation = Location
             else:
-                Name = ''
                 Location = ''
+                nation = ''
             try:
                 level = c.find('span',class_='contribution-count').text # 12
             except:#레벨없는경우
                 level = 0
             reviewcnt = c.find('span',class_='badgeText').text.split('reviews')[0].strip()#13
             votecnt = c.find_all('span',class_='badgeText')[-1].text.split('helpful')[0].strip()#14
-
-            #15.16
+            if 'review' in votecnt: # 리뷰투표수가 없어서 다른게나올시에는 0으로
+                votecnt = 0
+            #15.16 유저상세페이지
             code = requests.get(
                 'https://www.tripadvisor.co.uk/MemberOverlay?Mode=owa&uid={}&c=&src={}&fus=false&partner=false&LsoId='.format(uid,src))
-            # code = open('test.txt',encoding='utf8').read()
             bs4 = BeautifulSoup(code.text, 'lxml')
+            Name = bs4.find('h3',class_='username reviewsEnhancements').text.strip()
             lis = bs4.find_all('li', class_='countsReviewEnhancementsItem')
             citicnt = 0
             photocnt =0
-            for li in lis:
+            for li in lis: # 순서가 뒤죽박죽이라 keyword로 찾음
                 if 'Cities' in li.get_text().strip():
                     citicnt =li.find('span', class_='badgeTextReviewEnhancements').text.split(' ')[0].strip()
                 if 'Photos' in li.get_text().strip():
@@ -162,6 +173,7 @@ if __name__ == "__main__":
                 review_average_cnt= 0
                 review_poor_cnt = 0
                 review_terrible_cnt = 0
+            # print 테스트 쪽, 이부분 필요없을시 지우면 좀더 성능향상
             print("[Title]", Title)
             print("[Reviews]", Reviews)
             print("[Name]", Name)  ### 띄아쓰기 없애기
@@ -185,9 +197,7 @@ if __name__ == "__main__":
             print("[review_poor_cnt]", review_poor_cnt)  ### 세번째 태그 경로 " - " 이것도 나누기,
             print("[review_terrible_cnt]", review_terrible_cnt)  ### 세번째 태그 경로 " - " 이것도 나누기,
 
-            # print("[# of Help]",NofHelp)
-            # print("[# of Reviews]",NofR)
-            # print("[# of Total Help]",NofTH)
+            # 엑셀저장
             ws.write(j, 1, Title)
             ws.write(j, 2, int(Rate)/10)
             ws.write(j, 3, Date)
@@ -218,7 +228,7 @@ if __name__ == "__main__":
             ws.write(j, 18, Tag[3])
             ws.write(j, 19, numhlp)
             ws.write(j, 20, Name)
-            ws.write(j, 21, Location)
+            ws.write(j, 21, nation)
             ws.write(j, 22, Location)
             ws.write(j, 23, level)
             ws.write(j, 24, reviewcnt)
@@ -232,8 +242,5 @@ if __name__ == "__main__":
             ws.write(j, 32, review_terrible_cnt)
             ws.write(j, 33, imglink)
             print("_________________________________")
-
             j = j + 1
-            if num in [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100]:
-                time.sleep(10)
     wb.close()
