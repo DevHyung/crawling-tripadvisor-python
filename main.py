@@ -6,6 +6,8 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 
 if __name__ == "__main__":
+    # timeout 에러나
+    # socket 에러뜨니까 수정 요망 
     url = 'https://www.tripadvisor.co.uk/Airline_Review-d8729060-Reviews-Cheap-Flights-Delta-Air-Lines'
     ### 드라이버 셋팅
     driver = webdriver.Chrome("./chromedriver")
